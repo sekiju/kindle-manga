@@ -1,12 +1,10 @@
 import { fetch, request } from 'undici'
 import { AMAZON_COOKIES, USER_AGENT } from './constants'
 import { AmazonPage, AmazonScramble } from './types'
-import { createWriteStream, existsSync, mkdirSync, readFile } from 'fs'
+import { createWriteStream, existsSync, mkdirSync, readFile, rmSync, writeFileSync } from 'fs'
 import { generateCorrelationId, getPageName } from './utils/string'
 import { createUnzip } from 'node:zlib'
 import { resolve } from 'path'
-import archiver from 'archiver'
-import axios from 'axios'
 import { unscrambleImage } from './utils/image'
 
 export const downloadBook = async (uri: string) => {
@@ -19,15 +17,12 @@ export const downloadBook = async (uri: string) => {
 		if (res.ok)
 			return res.text()
 		throw res
-	}).catch(e => {
-		console.log(e)
-		return
-	})
+	}).catch(e => console.error(e))
 
 	if (!bookResponse)
 		throw 'Cannot get Book, maybe you dont bought it.'
 
-	console.log('Starting download book: ')
+	console.log('Starting download book...')
 
 	const requestData = JSON.parse( bookResponse.split('<script type="application/json" id="txtBookManifest">')[1].split('</script>')[0] )
 	const requestBook = JSON.parse( bookResponse.split('<script type="application/json" id="bookInfo">')[1].split('</script>')[0] )
@@ -118,7 +113,7 @@ export const downloadBook = async (uri: string) => {
 
 			readFile(resolve(path, resource.name), (err, data) => {
 				if (err) {
-					console.log(err)
+					console.error(err)
 					return
 				}
 
@@ -132,49 +127,35 @@ export const downloadBook = async (uri: string) => {
 				})
 
 				output.close()
+				rmSync(resolve(path, resource.name))
 			})
 		})
 	}
 
-	const zipPath = resolve(path, `Images.zip`)
-	const zipWriteStream = createWriteStream(zipPath)
-	const archive = archiver('zip')
-
-	archive.on('warning', err => {
-		if (err.code === 'ENOENT')
-			console.log('Warning:', err)
-		else
-			throw err
-	})
-
-	archive.on('error', err => { throw err })
-	archive.pipe(zipWriteStream)
-
 	return Promise.all(pages.map(async (page) => {
-		const imageResponse = await axios.get(page.url, {
-			responseType: "arraybuffer", // stream
+		const imageResponse = await request(page.url, {
+			responseHeader: 'raw', // stream
 			headers: {
 				'Content-type': 'image/jpeg',
 				'User-Agent': USER_AGENT,
 				'Cookie': AMAZON_COOKIES,
 			},
 		}).then(res => {
-			console.log(res.status)
-			return res.data
+			if (res.statusCode === 200)
+				return res.body.arrayBuffer()
+			console.log('error')
 		})
+
+		if (!imageResponse)
+			return console.error('Error when fetching image.')
 
 		const values = scrambles.find(s => s.name === page.name)?.values
 		if (!values)
-			return
+			return console.error('Can not find scramble map for', page.name)
 
 		const nameArray = page.name.split('_')
 
-		const unImage = await unscrambleImage(imageResponse, parseInt(nameArray[4]), parseInt(nameArray[5]), values)
-
-		archive.append(unImage, { name:`${getPageName(nameArray[1])}.png` })
-	})).then(async () => {
-		await archive.finalize()
-	}).then(() => {
-		console.log('book downloading completed. check files folder')
-	})
+		const unImage = await unscrambleImage(Buffer.from(new Uint8Array(imageResponse)), parseInt(nameArray[4]), parseInt(nameArray[5]), values)
+		writeFileSync(resolve(path, `${getPageName(nameArray[1])}.png`), unImage)
+	}))
 }

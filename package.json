@@ -2,17 +2,14 @@
   "name": "kindle-parser",
   "description": "Kindle Cloud Reader Parser/Scrapper developed for Japanese Amazon",
   "author": "Sekiju",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "license": "MIT",
   "dependencies": {
-    "archiver": "^5.3.1",
-    "axios": "^0.27.2",
     "canvas": "^2.9.1",
     "dotenv": "^16.0.1",
     "undici": "^5.4.0"
   },
   "devDependencies": {
-    "@types/archiver": "^5.3.1",
     "@types/node": "^17.0.23",
     "@typescript-eslint/eslint-plugin": "^5.19.0",
     "@typescript-eslint/parser": "^5.19.0",

@@ -13,5 +13,9 @@ export const unscrambleImage = async (inputImage: Buffer | string, width: number
 		ctx.drawImage(image, scramble[i + 2], scramble[i + 3], e, g, scramble[i], scramble[i + 1], e, g)
 	}
 
-	return canvas.toBuffer()
+	return canvas.toBuffer('image/png', {
+		compressionLevel: 9,
+		resolution: 72,
+		filters: canvas.PNG_FILTER_NONE,
+	})
 }
